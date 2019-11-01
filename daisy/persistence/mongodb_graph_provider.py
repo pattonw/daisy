@@ -341,8 +341,8 @@ class MongoDbGraphProvider(SharedGraphProvider):
                         ]
                     }
                 else:
-                endpoint_query = {self.endpoint_names[0]:
-                                  {'$in': node_ids[i_b:i_e]}}
+                    endpoint_query = {self.endpoint_names[0]:
+                                      {'$in': node_ids[i_b:i_e]}}
                 if attr_filter:
                     query = {'$and': filters + [endpoint_query]}
                 else:
@@ -371,9 +371,9 @@ class MongoDbGraphProvider(SharedGraphProvider):
                 nodes += additional_nodes
 
             else:
-        for edge in edges:
-            edge[u] = np.uint64(edge[u])
-            edge[v] = np.uint64(edge[v])
+                for edge in edges:
+                    edge[u] = np.uint64(edge[u])
+                    edge[v] = np.uint64(edge[v])
 
         finally:
 
