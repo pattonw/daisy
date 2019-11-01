@@ -470,7 +470,7 @@ class MongoDbGraphProvider(SharedGraphProvider):
         else:
             self.nodes.create_index(
                 [
-                    ('position.%s' % i, ASCENDING)
+                    ('%s.%s' % (self.position_attribute, i), ASCENDING)
                     for i in range(self.dims)
                 ],
                 name='position')
