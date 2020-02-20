@@ -1,0 +1,33 @@
+[package]
+name = "daisy"
+version = "0.3.0"
+authors = ["Jan Funke <funkej@janelia.hhmi.org>"]
+edition = "2018"
+
+[lib]
+name = "daisy"
+crate-type = ["cdylib"]
+
+[package.metadata.maturin]
+classifier = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3.5",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+]
+requires-python = ">=3.5"
+requires-dist = [
+            "numpy",
+            "tornado>=5,<6",
+            "networkx",
+            "pymongo"
+        ]
+
+[dependencies]
+pyo3 = { version = "0.8", features = ["extension-module"] }
+itertools = "0.8"
