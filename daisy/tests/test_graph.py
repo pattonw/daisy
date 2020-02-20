@@ -6,6 +6,8 @@ import unittest
 import random
 import numpy as np
 
+import pytest
+
 logger = logging.getLogger(__name__)
 daisy.scheduler._NO_SPAWN_STATUS_THREAD = True
 
@@ -23,6 +25,7 @@ class TestGraph(unittest.TestCase):
             mode=mode)
 
     # test basic graph io
+    @pytest.mark.mongo
     def test_graph_io_mongo(self):
         self.run_test_graph_io(self.mongo_provider_factory)
 
@@ -30,18 +33,22 @@ class TestGraph(unittest.TestCase):
         self.run_test_graph_io(self.file_provider_factory)
 
     # test fail_if_exists flag when writing subgraph
+    @pytest.mark.mongo
     def test_graph_fail_if_exists_mongo(self):
         self.run_test_graph_fail_if_exists(self.mongo_provider_factory)
 
     # test fail_if_not_exists flag when writing subgraph
+    @pytest.mark.mongo
     def test_graph_fail_if_not_exists_mongo(self):
         self.run_test_graph_fail_if_not_exists(self.mongo_provider_factory)
 
     # test that only specified attributes are written to backend
+    @pytest.mark.mongo
     def test_graph_write_attributes_mongo(self):
         self.run_test_graph_write_attributes(self.mongo_provider_factory)
 
     # test that only write nodes inside the write_roi
+    @pytest.mark.mongo
     def test_graph_write_roi_mongo(self):
         self.run_test_graph_write_roi(self.mongo_provider_factory)
 
@@ -49,14 +56,17 @@ class TestGraph(unittest.TestCase):
         self.run_test_graph_write_roi(self.file_provider_factory)
 
     # test connected components
+    @pytest.mark.mongo
     def test_graph_connected_components_mongo(self):
         self.run_test_graph_connected_components(self.mongo_provider_factory)
 
     # test has_edge
+    @pytest.mark.mongo
     def test_graph_has_edge_mongo(self):
         self.run_test_graph_has_edge(self.mongo_provider_factory)
 
     # test read_blockwise function
+    @pytest.mark.mongo
     def test_graph_read_blockwise_mongo(self):
         self.run_test_graph_read_blockwise(self.mongo_provider_factory)
 

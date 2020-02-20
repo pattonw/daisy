@@ -521,10 +521,10 @@ fn create_dep_graph(
 
 /// This module is a python module implemented in Rust.
 #[pymodule]
-fn blocks(py: Python, m: &PyModule) -> PyResult<()> {
-    //m.add_wrapped(wrap_pyfunction!(create_dependency_graph))?;
+fn daisy(py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pyfunction!(create_dependency_graph))?;
 
-    //m.add_class::<Block>()?;
+    m.add_class::<Block>()?;
 
 
     Ok(())
