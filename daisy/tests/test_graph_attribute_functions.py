@@ -5,6 +5,8 @@ import logging
 import unittest
 import networkx as nx
 
+import pytest
+
 logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.DEBUG)
 daisy.scheduler._NO_SPAWN_STATUS_THREAD = True
@@ -19,6 +21,7 @@ class TestFilterMongoGraph(unittest.TestCase):
             directed=True,
             mode=mode)
 
+    @pytest.mark.mongo
     def test_graph_filtering(self):
         graph_provider = self.get_mongo_graph_provider('w')
         roi = daisy.Roi((0, 0, 0),
@@ -62,6 +65,7 @@ class TestFilterMongoGraph(unittest.TestCase):
         self.assertCountEqual(expected_edge_endpoints,
                               filtered_subgraph.edges())
 
+    @pytest.mark.mongo
     def test_graph_filtering_complex(self):
         graph_provider = self.get_mongo_graph_provider('w')
         roi = daisy.Roi((0, 0, 0),
@@ -131,6 +135,7 @@ class TestFilterMongoGraph(unittest.TestCase):
         self.assertCountEqual(expected_edge_endpoints,
                               filtered_subgraph.edges())
 
+    @pytest.mark.mongo
     def test_graph_read_and_update_specific_attrs(self):
         graph_provider = self.get_mongo_graph_provider('w')
         roi = daisy.Roi((0, 0, 0),
@@ -195,6 +200,7 @@ class TestFilterMongoGraph(unittest.TestCase):
         for u, v, data in updated_graph.edges(data=True):
             self.assertEqual(data['c'], 5)
 
+    @pytest.mark.mongo
     def test_graph_read_unbounded_roi(self):
         graph_provider = self.get_mongo_graph_provider('w')
         roi = daisy.Roi((0, 0, 0),

@@ -11,3 +11,4 @@ build
 dist
 target
 test_daisy_graph
+.vscode

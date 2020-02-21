@@ -2,15 +2,61 @@
 extern crate itertools;
 
 use pyo3::prelude::*;
-use pyo3::wrap_pyfunction;
 use pyo3::{exceptions, PyErr, PyResult};
+use pyo3::{wrap_pyfunction, wrap_pymodule};
 
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::iter::StepBy;
 use std::ops::{Add, Div, Mul, Range, Sub};
 
+use std::error::Error;
+use std::fmt;
+
 mod cantor;
+
+type Result<T> = std::result::Result<T, DaisyError>;
+
+#[derive(Debug)]
+struct DaisyError {
+    details: String,
+}
+
+impl DaisyError {
+    fn new(msg: &str) -> DaisyError {
+        DaisyError {
+            details: msg.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for DaisyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
+
+impl Error for DaisyError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
+impl std::convert::From<std::num::TryFromIntError> for DaisyError {
+    fn from(err: std::num::TryFromIntError) -> DaisyError {
+        DaisyError::new(&err.to_string())
+    }
+}
+
+impl std::convert::From<DaisyError> for PyErr {
+    fn from(err: DaisyError) -> PyErr {
+        exceptions::OSError::py_err(err.to_string())
+    }
+}
 
 #[pyfunction]
 fn get_42() -> PyResult<usize> {
@@ -86,10 +132,15 @@ struct Roi {
 }
 
 impl Roi {
-    fn new(offset: Coordinate, shape: Coordinate) -> Self {
-        Roi {
-            offset: offset,
-            shape: shape,
+    fn new(offset: Coordinate, shape: Coordinate) -> Result<Self> {
+        match offset.dims() == shape.dims() {
+            true => Ok(Roi {
+                offset: offset,
+                shape: shape,
+            }),
+            false => Err(DaisyError::new(
+                "Roi offset and shape must have same dimensions",
+            )),
         }
     }
     fn begin(&self) -> Coordinate {
@@ -114,7 +165,7 @@ impl<'a, 'b> Add<&'b Coordinate> for &'a Roi {
 
     fn add(self, rhs: &'b Coordinate) -> Roi {
         let new_offset = &self.offset + rhs;
-        Roi::new(new_offset, self.shape.clone())
+        Roi::new(new_offset, self.shape.clone()).unwrap()
     }
 }
 
@@ -264,9 +315,12 @@ impl Coordinate {
     }
 }
 
-fn compute_level_stride(read_roi: &Roi, write_roi: &Roi) -> Coordinate {
+fn compute_level_stride(read_roi: &Roi, write_roi: &Roi) -> Result<Coordinate> {
     if !read_roi.contains(&write_roi) {
-        panic![format!["{:?} does not contain {:?}", read_roi, write_roi]]
+        return Err(DaisyError::new(&format![
+            "{:?} does not contain {:?}",
+            read_roi, write_roi
+        ]));
     };
 
     let context_lower: Coordinate = &write_roi.offset - &read_roi.offset;
@@ -275,16 +329,20 @@ fn compute_level_stride(read_roi: &Roi, write_roi: &Roi) -> Coordinate {
     let max_context: Coordinate = Coordinate::max(&context_lower, &context_upper);
     let min_level_stride = &max_context + &write_roi.shape;
 
-    &(&(&(&min_level_stride - 1) / &write_roi.shape) + 1) * &write_roi.shape
+    Ok(&(&(&(&min_level_stride - 1) / &write_roi.shape) + 1) * &write_roi.shape)
 }
 
-fn compute_level_offsets(write_roi: &Roi, stride: &Coordinate) -> Vec<Coordinate> {
+fn compute_level_offsets(write_roi: &Roi, stride: &Coordinate) -> Result<Vec<Coordinate>> {
     let write_step = &write_roi.shape;
-    let mut dim_offsets: Vec<StepBy<std::ops::Range<i64>>> = write_step
+    let write_step: Vec<usize> = write_step
         .value
         .iter()
+        .map(|s| usize::try_from(*s).unwrap())
+        .collect();
+    let mut dim_offsets: Vec<StepBy<std::ops::Range<i64>>> = write_step
+        .iter()
         .zip(stride.value.iter())
-        .map(|(step, stride)| (0..*stride).step_by(usize::try_from(*step).unwrap()))
+        .map(|(step, stride)| (0..*stride).step_by(*step))
         .collect();
     match dim_offsets.len() {
         3 => 3,
@@ -292,22 +350,22 @@ fn compute_level_offsets(write_roi: &Roi, stride: &Coordinate) -> Vec<Coordinate
     };
     let mut offsets: Vec<Coordinate> = vec![];
     for (c, b, a) in iproduct![
-        dim_offsets.pop().unwrap(),
-        dim_offsets.pop().unwrap(),
-        dim_offsets.pop().unwrap()
+        dim_offsets.pop().ok_or(DaisyError::new("Not 3D"))?,
+        dim_offsets.pop().ok_or(DaisyError::new("Not 3D"))?,
+        dim_offsets.pop().ok_or(DaisyError::new("Not 3D"))?
     ] {
         offsets.push(Coordinate {
             value: vec![a, b, c],
         });
     }
-    offsets.into_iter().rev().collect()
+    Ok(offsets.into_iter().rev().collect())
 }
 
 fn get_conflict_offsets(
     level_offset: &Coordinate,
     previous_level_offset: &Coordinate,
     level_stride: &Coordinate,
-) -> Vec<Coordinate> {
+) -> Result<Vec<Coordinate>> {
     let offset_to_prev = previous_level_offset - level_offset;
 
     let mut conflict_dim_offsets: Vec<Vec<i64>> = offset_to_prev
@@ -321,15 +379,21 @@ fn get_conflict_offsets(
         .collect();
 
     let mut conflict_offsets = vec![];
-    let ks = conflict_dim_offsets.pop().unwrap();
-    let js = conflict_dim_offsets.pop().unwrap();
-    let is = conflict_dim_offsets.pop().unwrap();
+    let ks = conflict_dim_offsets
+        .pop()
+        .ok_or(DaisyError::new("Not 3D"))?;
+    let js = conflict_dim_offsets
+        .pop()
+        .ok_or(DaisyError::new("Not 3D"))?;
+    let is = conflict_dim_offsets
+        .pop()
+        .ok_or(DaisyError::new("Not 3D"))?;
     for (a, b, c) in iproduct![is.iter(), js.iter(), ks.iter()] {
         conflict_offsets.push(Coordinate {
             value: vec![*a, *b, *c],
         })
     }
-    return conflict_offsets;
+    return Ok(conflict_offsets);
 }
 
 fn enumerate_blocks(
@@ -339,7 +403,7 @@ fn enumerate_blocks(
     conflict_offsets: &Vec<Coordinate>,
     block_offsets: Vec<Coordinate>,
     fit: Fit,
-) -> Vec<(Block, Vec<Block>)> {
+) -> Result<Vec<(Block, Vec<Block>)>> {
     let mut blocks = vec![];
     let mut num_skipped_blocks = 0;
     let mut num_skipped_conflicts = 0;
@@ -398,7 +462,7 @@ fn enumerate_blocks(
 
         blocks.push((fit_block, conflicts));
     }
-    return blocks;
+    return Ok(blocks);
 }
 
 #[pyfunction]
@@ -419,7 +483,7 @@ fn create_dependency_graph(
         Coordinate {
             value: total_roi_shape,
         },
-    );
+    )?;
     let block_read_roi = Roi::new(
         Coordinate {
             value: block_read_offset,
@@ -427,7 +491,7 @@ fn create_dependency_graph(
         Coordinate {
             value: block_read_shape,
         },
-    );
+    )?;
     let block_write_roi = Roi::new(
         Coordinate {
             value: block_write_offset,
@@ -435,7 +499,7 @@ fn create_dependency_graph(
         Coordinate {
             value: block_write_shape,
         },
-    );
+    )?;
     let fit = match fit {
         "valid" => Fit::Valid,
         "overhang" => Fit::Overhang,
@@ -448,7 +512,7 @@ fn create_dependency_graph(
         block_write_roi,
         read_write_conflict,
         fit,
-    ));
+    )?);
 }
 
 fn create_dep_graph(
@@ -457,9 +521,9 @@ fn create_dep_graph(
     block_write_roi: Roi,
     read_write_conflict: bool,
     fit: Fit,
-) -> Vec<(Block, Vec<Block>)> {
-    let level_stride = compute_level_stride(&block_read_roi, &block_write_roi);
-    let level_offsets = compute_level_offsets(&block_write_roi, &level_stride);
+) -> Result<Vec<(Block, Vec<Block>)>> {
+    let level_stride = compute_level_stride(&block_read_roi, &block_write_roi)?;
+    let level_offsets = compute_level_offsets(&block_write_roi, &level_stride)?;
 
     let total_shape = &total_roi.shape;
 
@@ -470,7 +534,7 @@ fn create_dep_graph(
     for (level, level_offset) in level_offsets.iter().enumerate() {
         if previous_level_offset.is_some() && read_write_conflict {
             let conflict_offsets =
-                get_conflict_offsets(level_offset, previous_level_offset.unwrap(), &level_stride);
+                get_conflict_offsets(level_offset, previous_level_offset.unwrap(), &level_stride)?;
             level_conflict_offsets.push(conflict_offsets);
         } else {
             let conflict_offsets = vec![];
@@ -492,9 +556,9 @@ fn create_dep_graph(
         }
         let mut block_offsets = vec![];
         for (c, b, a) in iproduct![
-            block_dim_offsets.pop().unwrap(),
-            block_dim_offsets.pop().unwrap(),
-            block_dim_offsets.pop().unwrap()
+            block_dim_offsets.pop().ok_or(DaisyError::new("Not 3D!"))?,
+            block_dim_offsets.pop().ok_or(DaisyError::new("Not 3D!"))?,
+            block_dim_offsets.pop().ok_or(DaisyError::new("Not 3D!"))?
         ] {
             block_offsets.push(Coordinate {
                 value: vec![a, b, c],
@@ -513,20 +577,28 @@ fn create_dep_graph(
             &level_conflict_offsets[level],
             block_offsets,
             fit,
-        );
+        )?;
         blocks.append(&mut new_blocks);
     }
-    return blocks;
+    Ok(blocks)
 }
 
-/// This module is a python module implemented in Rust.
 #[pymodule]
 fn daisy(py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_wrapped(wrap_pymodule!(blocks))?;
+    m.add_wrapped(wrap_pymodule!(block))?;
+    Ok(())
+}
+/// This module is a python module implemented in Rust.
+#[pymodule]
+fn blocks(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(create_dependency_graph))?;
+    Ok(())
+}
 
+#[pymodule]
+fn block(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Block>()?;
-
-
     Ok(())
 }
 
@@ -538,18 +610,22 @@ mod tests {
         let total_roi = Roi::new(
             Coordinate::new(vec![0, 0, 0]),
             Coordinate::new(vec![42, 42, 42]),
-        );
+        )
+        .unwrap();
         let read_roi = Roi::new(
             Coordinate::new(vec![0, 0, 0]),
             Coordinate::new(vec![4, 4, 4]),
-        );
+        )
+        .unwrap();
         let write_roi = Roi::new(
             Coordinate::new(vec![1, 1, 1]),
             Coordinate::new(vec![2, 2, 2]),
-        );
+        )
+        .unwrap();
         let read_write_conflict = true;
         let fit = Fit::Valid;
-        let graph = create_dep_graph(total_roi, read_roi, write_roi, read_write_conflict, fit);
+        let graph =
+            create_dep_graph(total_roi, read_roi, write_roi, read_write_conflict, fit).unwrap();
         let blocks: Vec<(Vec<i64>, Vec<i64>)> = graph
             .iter()
             .map(|(block, conflicts)| (block.read_roi.begin().value, block.read_roi.end().value))
@@ -562,13 +638,18 @@ mod tests {
         let read_roi = Roi::new(
             Coordinate::new(vec![0, 0, 0]),
             Coordinate::new(vec![4, 4, 4]),
-        );
+        )
+        .unwrap();
         let write_roi = Roi::new(
             Coordinate::new(vec![1, 1, 1]),
             Coordinate::new(vec![2, 2, 2]),
-        );
+        )
+        .unwrap();
         let expected_stride = Coordinate::new(vec![4, 4, 4]);
-        assert_eq![compute_level_stride(&read_roi, &write_roi), expected_stride];
+        assert_eq![
+            compute_level_stride(&read_roi, &write_roi).unwrap(),
+            expected_stride
+        ];
     }
 
     #[test]
@@ -576,9 +657,10 @@ mod tests {
         let write_roi = Roi::new(
             Coordinate::new(vec![1, 1, 1]),
             Coordinate::new(vec![2, 2, 2]),
-        );
+        )
+        .unwrap();
         let stride = Coordinate::new(vec![2, 2, 2]);
-        assert_eq![compute_level_offsets(&write_roi, &stride).len(), 1];
+        assert_eq![compute_level_offsets(&write_roi, &stride).unwrap().len(), 1];
     }
 
     #[test]
@@ -597,7 +679,7 @@ mod tests {
             Coordinate::new(vec![0, 0, 0]),
         ];
         assert_eq![
-            get_conflict_offsets(&level_offset, &prev_level_offset, &level_stride),
+            get_conflict_offsets(&level_offset, &prev_level_offset, &level_stride).unwrap(),
             expected_conflict_offsets
         ];
     }
@@ -607,15 +689,18 @@ mod tests {
         let total_roi = Roi::new(
             Coordinate::new(vec![0, 0, 0]),
             Coordinate::new(vec![10, 10, 10]),
-        );
+        )
+        .unwrap();
         let read_roi = Roi::new(
             Coordinate::new(vec![0, 0, 0]),
             Coordinate::new(vec![4, 4, 4]),
-        );
+        )
+        .unwrap();
         let write_roi = Roi::new(
             Coordinate::new(vec![1, 1, 1]),
             Coordinate::new(vec![2, 2, 2]),
-        );
+        )
+        .unwrap();
         let conflict_offsets = vec![Coordinate::new(vec![2, 0, 0])];
         let block_offsets = vec![
             Coordinate::new(vec![2, 2, 2]),
@@ -629,7 +714,8 @@ mod tests {
             &conflict_offsets,
             block_offsets,
             fit,
-        );
+        )
+        .unwrap();
         assert_eq![blocks.len(), 2];
     }
 }

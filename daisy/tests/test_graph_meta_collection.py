@@ -1,5 +1,6 @@
 import daisy
 import unittest
+import pytest
 
 
 class TestMetaCollection(unittest.TestCase):
@@ -11,6 +12,7 @@ class TestMetaCollection(unittest.TestCase):
             total_roi=total_roi,
             mode=mode)
 
+    @pytest.mark.mongo
     def test_graph_read_meta_values(self):
         roi = daisy.Roi((0, 0, 0),
                         (10, 10, 10))
@@ -23,6 +25,7 @@ class TestMetaCollection(unittest.TestCase):
         self.assertEqual(True, graph_provider.directed)
         self.assertEqual(roi, graph_provider.total_roi)
 
+    @pytest.mark.mongo
     def test_graph_default_meta_values(self):
         provider = self.get_mongo_graph_provider(
                 'w', None, None)
@@ -35,6 +38,7 @@ class TestMetaCollection(unittest.TestCase):
         self.assertEqual(False, graph_provider.directed)
         self.assertIsNone(graph_provider.total_roi)
 
+    @pytest.mark.mongo
     def test_graph_nonmatching_meta_values(self):
         roi = daisy.Roi((0, 0, 0),
                         (10, 10, 10))
