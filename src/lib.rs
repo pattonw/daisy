@@ -1,3 +1,4 @@
+#![feature(slice_patterns)]
 #[macro_use]
 extern crate itertools;
 
@@ -94,13 +95,13 @@ fn get_z_order_id(total_roi: &Roi, write_roi: &Roi) -> u64 {
 #[pyclass]
 #[derive(Debug)]
 struct Block {
-    #[pyo3(get)]
+    // #[pyo3(get)]
     read_roi: Roi,
-    #[pyo3(get)]
+    // #[pyo3(get)]
     write_roi: Roi,
-    #[pyo3(get)]
+    // #[pyo3(get)]
     block_id: u64,
-    #[pyo3(get)]
+    // #[pyo3(get)]
     z_order_id: u64,
 }
 
@@ -125,9 +126,9 @@ impl Block {
 #[pyclass]
 #[derive(Debug, Clone)]
 struct Roi {
-    #[pyo3(get)]
+    // #[pyo3(get)]
     offset: Coordinate,
-    #[pyo3(get)]
+    // #[pyo3(get)]
     shape: Coordinate,
 }
 
@@ -172,7 +173,7 @@ impl<'a, 'b> Add<&'b Coordinate> for &'a Roi {
 #[pyclass]
 #[derive(Debug, Eq, Clone)]
 struct Coordinate {
-    #[pyo3(get)]
+    // #[pyo3(get)]
     value: Vec<i64>,
 }
 
@@ -589,7 +590,7 @@ fn daisy(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(block))?;
     Ok(())
 }
-/// This module is a python module implemented in Rust.
+
 #[pymodule]
 fn blocks(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(create_dependency_graph))?;
