@@ -22,6 +22,7 @@ class TestFilterMongoGraph(unittest.TestCase):
             mode=mode)
 
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_filtering(self):
         graph_provider = self.get_mongo_graph_provider('w')
         roi = daisy.Roi((0, 0, 0),
@@ -66,6 +67,7 @@ class TestFilterMongoGraph(unittest.TestCase):
                               filtered_subgraph.edges())
 
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_filtering_complex(self):
         graph_provider = self.get_mongo_graph_provider('w')
         roi = daisy.Roi((0, 0, 0),
@@ -136,6 +138,7 @@ class TestFilterMongoGraph(unittest.TestCase):
                               filtered_subgraph.edges())
 
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_read_and_update_specific_attrs(self):
         graph_provider = self.get_mongo_graph_provider('w')
         roi = daisy.Roi((0, 0, 0),
@@ -201,6 +204,7 @@ class TestFilterMongoGraph(unittest.TestCase):
             self.assertEqual(data['c'], 5)
 
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_read_unbounded_roi(self):
         graph_provider = self.get_mongo_graph_provider('w')
         roi = daisy.Roi((0, 0, 0),

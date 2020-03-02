@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-from .block import Block
+from .pyblock import Block
 from .coordinate import Coordinate
 from .roi import Roi
 from itertools import product

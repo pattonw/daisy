@@ -26,6 +26,7 @@ class TestGraph(unittest.TestCase):
 
     # test basic graph io
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_io_mongo(self):
         self.run_test_graph_io(self.mongo_provider_factory)
 
@@ -34,21 +35,25 @@ class TestGraph(unittest.TestCase):
 
     # test fail_if_exists flag when writing subgraph
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_fail_if_exists_mongo(self):
         self.run_test_graph_fail_if_exists(self.mongo_provider_factory)
 
     # test fail_if_not_exists flag when writing subgraph
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_fail_if_not_exists_mongo(self):
         self.run_test_graph_fail_if_not_exists(self.mongo_provider_factory)
 
     # test that only specified attributes are written to backend
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_write_attributes_mongo(self):
         self.run_test_graph_write_attributes(self.mongo_provider_factory)
 
     # test that only write nodes inside the write_roi
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_write_roi_mongo(self):
         self.run_test_graph_write_roi(self.mongo_provider_factory)
 
@@ -57,19 +62,24 @@ class TestGraph(unittest.TestCase):
 
     # test connected components
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_connected_components_mongo(self):
         self.run_test_graph_connected_components(self.mongo_provider_factory)
 
     # test has_edge
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_has_edge_mongo(self):
         self.run_test_graph_has_edge(self.mongo_provider_factory)
 
     # test read_blockwise function
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_read_blockwise_mongo(self):
         self.run_test_graph_read_blockwise(self.mongo_provider_factory)
 
+    @pytest.mark.slow
+    @pytest.mark.no_rust
     def test_graph_read_blockwise_file(self):
         self.run_test_graph_read_blockwise(self.file_provider_factory)
 

@@ -13,6 +13,7 @@ class TestMetaCollection(unittest.TestCase):
             mode=mode)
 
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_read_meta_values(self):
         roi = daisy.Roi((0, 0, 0),
                         (10, 10, 10))
@@ -26,6 +27,7 @@ class TestMetaCollection(unittest.TestCase):
         self.assertEqual(roi, graph_provider.total_roi)
 
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_default_meta_values(self):
         provider = self.get_mongo_graph_provider(
                 'w', None, None)
@@ -39,6 +41,7 @@ class TestMetaCollection(unittest.TestCase):
         self.assertIsNone(graph_provider.total_roi)
 
     @pytest.mark.mongo
+    @pytest.mark.no_rust
     def test_graph_nonmatching_meta_values(self):
         roi = daisy.Roi((0, 0, 0),
                         (10, 10, 10))

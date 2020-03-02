@@ -29,5 +29,6 @@ requires-dist = [
         ]
 
 [dependencies]
-pyo3 = { version = "0.8", features = ["extension-module"] }
+pyo3 = { version = "0.9.0-alpha.1", features = ["extension-module"] }
 itertools = "0.8"
+serde = "1.0.104"

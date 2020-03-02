@@ -6,6 +6,8 @@ import glob
 import os
 import logging
 
+import pytest
+
 logger = logging.getLogger(__name__)
 daisy.scheduler._NO_SPAWN_STATUS_THREAD = True
 
@@ -112,6 +114,7 @@ class TestBlockwiseBasics(TmpDirTestCase):
         expected_block_ids.remove(16)
         self.assertEqual(block_ids, expected_block_ids)
 
+
     def test_negative_offset(self):
 
         logger.warning("A warning")
@@ -144,6 +147,7 @@ class TestBlockwiseBasics(TmpDirTestCase):
 
         self.assertTrue(ret)
         self.assertEqual(len(block_ids), 5)
+
 
     def test_multidim(self):
 

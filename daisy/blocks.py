@@ -1,14 +1,17 @@
 from .daisy import blocks
-from .pyblocks import expand_roi_to_grid # noqa
-from .pyblocks import expand_write_roi_to_grid # noqa
-from .pyblocks import get_subgraph_blocks # noqa
-from .pyblocks import expand_request_roi_to_grid # noqa
+from .freezable import Freezable
+
+from .pyblocks import expand_roi_to_grid  # noqa
+from .pyblocks import expand_write_roi_to_grid  # noqa
+from .pyblocks import get_subgraph_blocks  # noqa
+from .pyblocks import expand_request_roi_to_grid  # noqa
+
 
 
 def create_dependency_graph(
     total_roi, block_read_roi, block_write_roi, read_write_conflict=True, fit="valid"
 ):
-    return blocks.create_dependency_graph(
+    dep_graph = blocks.create_dependency_graph(
         total_roi.get_offset(),
         total_roi.get_shape(),
         block_read_roi.get_offset(),
@@ -18,4 +21,4 @@ def create_dependency_graph(
         read_write_conflict,
         fit,
     )
-
+    return dep_graph
