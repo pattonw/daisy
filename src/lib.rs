@@ -626,10 +626,6 @@ mod tests {
         let fit = Fit::Valid;
         let graph =
             create_dep_graph(total_roi, read_roi, write_roi, read_write_conflict, fit).unwrap();
-        let blocks: Vec<(Vec<i64>, Vec<i64>)> = graph
-            .iter()
-            .map(|(block, conflicts)| (block.read_roi.begin().value, block.read_roi.end().value))
-            .collect();
         assert_eq![graph.len(), 8000];
     }
 
@@ -664,18 +660,44 @@ mod tests {
     }
 
     #[test]
+    fn test_cartesian_product() {
+        let a = vec![0, 1];
+        let b = vec![0, 1];
+        let c = vec![0, 1];
+
+        let expected_product = vec![
+            vec![0, 0, 0],
+            vec![1, 0, 0],
+            vec![0, 1, 0],
+            vec![1, 1, 0],
+            vec![0, 0, 1],
+            vec![1, 0, 1],
+            vec![0, 1, 1],
+            vec![1, 1, 1],
+        ];
+
+        assert_eq!(
+            cartesian_product(
+                &vec![a.into_iter(), b.into_iter(), c.into_iter()],
+                vec![vec![]]
+            ),
+            expected_product
+        );
+    }
+
+    #[test]
     fn test_get_conflict_offset() {
         let level_offset = Coordinate::new(vec![0, 2, 4]);
         let prev_level_offset = Coordinate::new(vec![0, 2, 2]);
         let level_stride = Coordinate::new(vec![2, 2, 2]);
         let expected_conflict_offsets = vec![
             Coordinate::new(vec![-2, -2, -2]),
-            Coordinate::new(vec![-2, -2, 0]),
-            Coordinate::new(vec![-2, 0, -2]),
-            Coordinate::new(vec![-2, 0, 0]),
             Coordinate::new(vec![0, -2, -2]),
-            Coordinate::new(vec![0, -2, 0]),
+            Coordinate::new(vec![-2, 0, -2]),
             Coordinate::new(vec![0, 0, -2]),
+            Coordinate::new(vec![-2, -2, 0]),
+            Coordinate::new(vec![0, -2, 0]),
+            Coordinate::new(vec![-2, 0, 0]),
             Coordinate::new(vec![0, 0, 0]),
         ];
         assert_eq![
