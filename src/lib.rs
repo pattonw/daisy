@@ -1,68 +1,32 @@
-#![feature(slice_patterns)]
 #[macro_use]
 extern crate itertools;
+
+extern crate serde;
 
 use pyo3::prelude::*;
 use pyo3::{exceptions, PyErr, PyResult};
 use pyo3::{wrap_pyfunction, wrap_pymodule};
 
-use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::iter::StepBy;
-use std::ops::{Add, Div, Mul, Range, Sub};
 
 use std::error::Error;
 use std::fmt;
 
+mod block;
+use block::Block;
 mod cantor;
+mod coordinate;
+use coordinate::Coordinate;
+mod roi;
+use roi::Roi;
 
-type Result<T> = std::result::Result<T, DaisyError>;
+mod daisy_result;
+mod daisy_error;
 
-#[derive(Debug)]
-struct DaisyError {
-    details: String,
-}
+use daisy_error::DaisyError;
+use daisy_result::DaisyResult;
 
-impl DaisyError {
-    fn new(msg: &str) -> DaisyError {
-        DaisyError {
-            details: msg.to_string(),
-        }
-    }
-}
-
-impl fmt::Display for DaisyError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.details)
-    }
-}
-
-impl Error for DaisyError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
-
-impl std::convert::From<std::num::TryFromIntError> for DaisyError {
-    fn from(err: std::num::TryFromIntError) -> DaisyError {
-        DaisyError::new(&err.to_string())
-    }
-}
-
-impl std::convert::From<DaisyError> for PyErr {
-    fn from(err: DaisyError) -> PyErr {
-        exceptions::OSError::py_err(err.to_string())
-    }
-}
-
-#[pyfunction]
-fn get_42() -> PyResult<usize> {
-    Ok(42)
-}
 
 #[derive(Clone, Copy)]
 enum Fit {
@@ -71,252 +35,32 @@ enum Fit {
     Shrink,
 }
 
-fn get_z_order_id(total_roi: &Roi, write_roi: &Roi) -> u64 {
-    // 3D specific
-    let large_block = Coordinate::new(vec![2048, 2048, 2048]);
-    let block_index_z = &write_roi.offset / &large_block;
-    let mut indices = block_index_z.value;
-    let bit32_constant = 1 << 31;
-    let mut n = 0;
-    let mut z_order_id = 0;
-    while n < 32 {
-        for i in 0..total_roi.dims() {
-            z_order_id = z_order_id >> 1;
-            if (indices[i] & 1) != 0 {
-                z_order_id += bit32_constant;
-            };
-            indices[i] = indices[i] >> 1;
-            n += 1;
-        }
-    }
-    return z_order_id;
-}
-
-#[pyclass]
-#[derive(Debug)]
-struct Block {
-    // #[pyo3(get)]
-    read_roi: Roi,
-    // #[pyo3(get)]
-    write_roi: Roi,
-    // #[pyo3(get)]
-    block_id: u64,
-    // #[pyo3(get)]
-    z_order_id: u64,
-}
-
-impl Block {
-    fn new(total_roi: &Roi, read_roi: &Roi, write_roi: &Roi) -> Self {
-        let block_index = &write_roi.offset / &write_roi.shape;
-        let block_id =
-            cantor::cantor_number(&block_index.value.iter().map(|a| *a as u64).collect());
-        let z_order_id = get_z_order_id(total_roi, write_roi);
-        return Block {
-            read_roi: read_roi.clone(),
-            write_roi: write_roi.clone(),
-            block_id: block_id,
-            z_order_id: z_order_id,
-        };
-    }
-    fn shrink_to(self, container: &Roi) -> Self {
-        unimplemented![];
-    }
-}
-
-#[pyclass]
-#[derive(Debug, Clone)]
-struct Roi {
-    // #[pyo3(get)]
-    offset: Coordinate,
-    // #[pyo3(get)]
-    shape: Coordinate,
-}
-
-impl Roi {
-    fn new(offset: Coordinate, shape: Coordinate) -> Result<Self> {
-        match offset.dims() == shape.dims() {
-            true => Ok(Roi {
-                offset: offset,
-                shape: shape,
-            }),
-            false => Err(DaisyError::new(
-                "Roi offset and shape must have same dimensions",
-            )),
-        }
-    }
-    fn begin(&self) -> Coordinate {
-        self.offset.clone()
-    }
-    fn end(&self) -> Coordinate {
-        &self.offset + &self.shape
-    }
-    fn contains(&self, rhs: &Roi) -> bool {
-        self.begin() <= rhs.begin() && self.end() >= rhs.end()
-    }
-    fn contains_coord(&self, rhs: &Coordinate) -> bool {
-        self.begin() <= *rhs && self.end() > *rhs
-    }
-    fn dims(&self) -> usize {
-        usize::min(self.offset.dims(), self.shape.dims())
-    }
-}
-
-impl<'a, 'b> Add<&'b Coordinate> for &'a Roi {
-    type Output = Roi;
-
-    fn add(self, rhs: &'b Coordinate) -> Roi {
-        let new_offset = &self.offset + rhs;
-        Roi::new(new_offset, self.shape.clone()).unwrap()
-    }
-}
-
-#[pyclass]
-#[derive(Debug, Eq, Clone)]
-struct Coordinate {
-    // #[pyo3(get)]
-    value: Vec<i64>,
-}
-
-impl<'a, 'b> Add<&'b Coordinate> for &'a Coordinate {
-    type Output = Coordinate;
-
-    fn add(self, rhs: &'b Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
-            .value
-            .iter()
-            .zip(rhs.value.iter())
-            .map(|(a, b)| *a + *b)
-            .collect();
-        Coordinate::new(new_value)
-    }
-}
-
-impl<T: Into<i64> + Copy> Add<T> for &Coordinate {
-    type Output = Coordinate;
-
-    fn add(self, rhs: T) -> Coordinate {
-        let new_value: Vec<i64> = self.value.iter().map(|a| *a + rhs.into()).collect();
-        Coordinate::new(new_value)
-    }
-}
-
-impl<'a, 'b> Sub<&'b Coordinate> for &'a Coordinate {
-    type Output = Coordinate;
-
-    fn sub(self, rhs: &'b Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
-            .value
-            .iter()
-            .zip(rhs.value.iter())
-            .map(|(a, b)| *a - *b)
-            .collect();
-        Coordinate::new(new_value)
-    }
-}
-
-impl<T: Into<i64> + Copy> Sub<T> for &Coordinate {
-    type Output = Coordinate;
-
-    fn sub(self, rhs: T) -> Coordinate {
-        let new_value: Vec<i64> = self.value.iter().map(|a| *a - rhs.into()).collect();
-        Coordinate::new(new_value)
-    }
-}
-
-impl<'a, 'b> Div<&'b Coordinate> for &'a Coordinate {
-    type Output = Coordinate;
-
-    fn div(self, rhs: &'b Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
-            .value
-            .iter()
-            .zip(rhs.value.iter())
-            .map(|(a, b)| *a / *b)
-            .collect();
-        Coordinate::new(new_value)
-    }
-}
-
-impl<'a, 'b> Mul<&'b Coordinate> for &'a Coordinate {
-    type Output = Coordinate;
-
-    fn mul(self, rhs: &'b Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
-            .value
-            .iter()
-            .zip(rhs.value.iter())
-            .map(|(a, b)| *a * *b)
-            .collect();
-        Coordinate::new(new_value)
-    }
-}
-
-impl PartialOrd for Coordinate {
-    fn partial_cmp(&self, rhs: &Coordinate) -> Option<Ordering> {
-        let comparison: Vec<Ordering> = self
-            .value
-            .iter()
-            .zip(rhs.value.iter())
-            .map(|(a, b)| a.cmp(b))
-            .collect();
-        comparison
-            .iter()
-            .fold(Some(Ordering::Equal), |acc, x| match (acc, x) {
-                (Some(Ordering::Less), Ordering::Less) => Some(Ordering::Less),
-                (Some(Ordering::Greater), Ordering::Greater) => Some(Ordering::Greater),
-                (acc, Ordering::Equal) => acc,
-                (Some(Ordering::Equal), x) => Some(*x),
-                _ => None,
+fn cartesian_product<I, T>(remaining: &Vec<I>, complete: Vec<Vec<T>>) -> Vec<Vec<T>>
+where
+    I: Iterator<Item = T> + Clone,
+    T: Copy,
+{
+    match remaining.len() {
+        0 => complete,
+        1 => iproduct![remaining[0].clone().into_iter(), complete.into_iter()]
+            .map(|(r, mut acc)| {
+                acc.push(r);
+                return acc;
             })
+            .collect(),
+        _ => cartesian_product(
+            &remaining[1..].to_vec(),
+            iproduct![remaining[0].clone().into_iter(), complete.into_iter()]
+                .map(|(r, mut acc)| {
+                    acc.push(r);
+                    return acc;
+                })
+                .collect(),
+        ),
     }
 }
 
-impl PartialEq for Coordinate {
-    fn eq(&self, rhs: &Coordinate) -> bool {
-        return self.value.len() == rhs.value.len()
-            && self
-                .value
-                .iter()
-                .zip(rhs.value.iter())
-                .map(|(a, b)| a == b)
-                .all(|a| a);
-    }
-}
-
-impl Coordinate {
-    fn new(coordinate: Vec<i64>) -> Self {
-        Coordinate { value: coordinate }
-    }
-    fn max(&self, rhs: &Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
-            .value
-            .iter()
-            .zip(rhs.value.iter())
-            .map(|(a, b)| match a.cmp(b) {
-                Ordering::Less => *b,
-                _ => *a,
-            })
-            .collect();
-        Self { value: new_value }
-    }
-    fn min(&self, rhs: &Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
-            .value
-            .iter()
-            .zip(rhs.value.iter())
-            .map(|(a, b)| match a.cmp(b) {
-                Ordering::Greater => *b,
-                _ => *a,
-            })
-            .collect();
-        Self { value: new_value }
-    }
-    fn dims(&self) -> usize {
-        self.value.len()
-    }
-}
-
-fn compute_level_stride(read_roi: &Roi, write_roi: &Roi) -> Result<Coordinate> {
+fn compute_level_stride(read_roi: &Roi, write_roi: &Roi) -> DaisyResult<Coordinate> {
     if !read_roi.contains(&write_roi) {
         return Err(DaisyError::new(&format![
             "{:?} does not contain {:?}",
@@ -333,31 +77,21 @@ fn compute_level_stride(read_roi: &Roi, write_roi: &Roi) -> Result<Coordinate> {
     Ok(&(&(&(&min_level_stride - 1) / &write_roi.shape) + 1) * &write_roi.shape)
 }
 
-fn compute_level_offsets(write_roi: &Roi, stride: &Coordinate) -> Result<Vec<Coordinate>> {
+fn compute_level_offsets(write_roi: &Roi, stride: &Coordinate) -> DaisyResult<Vec<Coordinate>> {
     let write_step = &write_roi.shape;
     let write_step: Vec<usize> = write_step
         .value
         .iter()
         .map(|s| usize::try_from(*s).unwrap())
         .collect();
-    let mut dim_offsets: Vec<StepBy<std::ops::Range<i64>>> = write_step
+    let dim_offsets: Vec<StepBy<std::ops::Range<i64>>> = write_step
         .iter()
         .zip(stride.value.iter())
         .map(|(step, stride)| (0..*stride).step_by(*step))
         .collect();
-    match dim_offsets.len() {
-        3 => 3,
-        _ => panic!["Only supporting 3 dimensions at the moment"],
-    };
     let mut offsets: Vec<Coordinate> = vec![];
-    for (c, b, a) in iproduct![
-        dim_offsets.pop().ok_or(DaisyError::new("Not 3D"))?,
-        dim_offsets.pop().ok_or(DaisyError::new("Not 3D"))?,
-        dim_offsets.pop().ok_or(DaisyError::new("Not 3D"))?
-    ] {
-        offsets.push(Coordinate {
-            value: vec![a, b, c],
-        });
+    for coord in cartesian_product(&dim_offsets, vec![vec![]]) {
+        offsets.push(Coordinate::new(coord));
     }
     Ok(offsets.into_iter().rev().collect())
 }
@@ -366,33 +100,22 @@ fn get_conflict_offsets(
     level_offset: &Coordinate,
     previous_level_offset: &Coordinate,
     level_stride: &Coordinate,
-) -> Result<Vec<Coordinate>> {
+) -> DaisyResult<Vec<Coordinate>> {
     let offset_to_prev = previous_level_offset - level_offset;
 
-    let mut conflict_dim_offsets: Vec<Vec<i64>> = offset_to_prev
+    let conflict_dim_offsets: Vec<std::vec::IntoIter<i64>> = offset_to_prev
         .value
         .iter()
         .zip(level_stride.value.iter())
         .map(|(offset, stride)| match *offset < 0i64 {
-            true => vec![*offset, offset + stride],
-            false => vec![offset - stride, *offset],
+            true => vec![*offset, *offset + *stride].into_iter(),
+            false => vec![*offset - *stride, *offset].into_iter(),
         })
         .collect();
 
     let mut conflict_offsets = vec![];
-    let ks = conflict_dim_offsets
-        .pop()
-        .ok_or(DaisyError::new("Not 3D"))?;
-    let js = conflict_dim_offsets
-        .pop()
-        .ok_or(DaisyError::new("Not 3D"))?;
-    let is = conflict_dim_offsets
-        .pop()
-        .ok_or(DaisyError::new("Not 3D"))?;
-    for (a, b, c) in iproduct![is.iter(), js.iter(), ks.iter()] {
-        conflict_offsets.push(Coordinate {
-            value: vec![*a, *b, *c],
-        })
+    for coord in cartesian_product(&conflict_dim_offsets, vec![vec![]]) {
+        conflict_offsets.push(Coordinate::new(coord))
     }
     return Ok(conflict_offsets);
 }
@@ -404,64 +127,68 @@ fn enumerate_blocks(
     conflict_offsets: &Vec<Coordinate>,
     block_offsets: Vec<Coordinate>,
     fit: Fit,
-) -> Result<Vec<(Block, Vec<Block>)>> {
+) -> DaisyResult<Vec<(Block, Vec<Block>)>> {
     let mut blocks = vec![];
-    let mut num_skipped_blocks = 0;
-    let mut num_skipped_conflicts = 0;
     let num_conflicts = block_offsets.len() * conflict_offsets.len();
     for block_offset in block_offsets {
-        let block = Block::new(
-            total_roi,
-            &(block_read_roi + &block_offset),
-            &(block_write_roi + &block_offset),
-        );
+        let read_roi = block_read_roi + &block_offset;
+        let write_roi = block_write_roi + &block_offset;
         let contained = match fit {
-            Fit::Valid => total_roi.contains(&block.read_roi),
-            Fit::Overhang => total_roi.contains_coord(&block.write_roi.begin()),
+            Fit::Valid => total_roi.contains(&read_roi),
+            Fit::Overhang => total_roi.contains_coord(&write_roi.get_begin()),
             Fit::Shrink => {
-                let upper_context = &block.read_roi.end() - &block.write_roi.end();
-                total_roi.contains_coord(&block.write_roi.begin())
-                    && total_roi.contains_coord(&(&(&block.write_roi.begin() + &upper_context) + 1))
+                let upper_context = &read_roi.end() - &write_roi.end();
+                total_roi.contains_coord(&write_roi.get_begin())
+                    && total_roi.contains_coord(&(&(&write_roi.get_begin() + &upper_context) + 1))
             }
         };
-        if !contained {
-            num_skipped_blocks += 1;
+        let block = match contained {
+            true => Some(Block::new_block(&total_roi, &read_roi, &write_roi)),
+            false => None,
+        };
+        if block.is_none() {
             continue;
-        }
+        };
+        let block = block.unwrap();
         let mut conflicts = vec![];
         for conflict_offset in conflict_offsets {
-            let conflict = Block::new(
-                total_roi,
-                &(&block.read_roi + conflict_offset),
-                &(&block.write_roi + conflict_offset),
-            );
+            let read_roi = block_read_roi + &conflict_offset;
+            let write_roi = block_write_roi + &conflict_offset;
             let contained = match fit {
-                Fit::Valid => total_roi.contains(&conflict.read_roi),
-                Fit::Overhang => total_roi.contains_coord(&conflict.write_roi.begin()),
+                Fit::Valid => total_roi.contains(&read_roi),
+                Fit::Overhang => total_roi.contains_coord(&write_roi.get_begin()),
                 Fit::Shrink => {
-                    let upper_context = &conflict.read_roi.end() - &conflict.write_roi.end();
-                    total_roi.contains_coord(&conflict.write_roi.begin())
+                    let upper_context = &read_roi.end() - &write_roi.end();
+                    total_roi.contains_coord(&write_roi.get_begin())
                         && total_roi
-                            .contains_coord(&(&(&conflict.write_roi.begin() + &upper_context) + 1))
+                            .contains_coord(&(&(&write_roi.get_begin() + &upper_context) + 1))
                 }
             };
-            if !contained {
-                num_skipped_conflicts += 1;
+            let conflict = match contained {
+                true => Some(Block::new_block(&total_roi, &read_roi, &write_roi)),
+                false => None,
+            };
+            if conflict.is_none() {
                 continue;
-            }
+            };
+            let conflict = conflict.unwrap();
             let fit_conflict = match fit {
                 Fit::Shrink => conflict.shrink_to(total_roi),
-                _ => conflict,
+                _ => Some(conflict),
             };
-            conflicts.push(fit_conflict);
+            if fit_conflict.is_some() {
+                conflicts.push(fit_conflict.unwrap());
+            }
         }
 
         let fit_block = match fit {
             Fit::Shrink => block.shrink_to(total_roi),
-            _ => block,
+            _ => Some(block),
         };
 
-        blocks.push((fit_block, conflicts));
+        if fit_block.is_some() {
+            blocks.push((fit_block.unwrap(), conflicts));
+        }
     }
     return Ok(blocks);
 }
@@ -522,7 +249,7 @@ fn create_dep_graph(
     block_write_roi: Roi,
     read_write_conflict: bool,
     fit: Fit,
-) -> Result<Vec<(Block, Vec<Block>)>> {
+) -> DaisyResult<Vec<(Block, Vec<Block>)>> {
     let level_stride = compute_level_stride(&block_read_roi, &block_write_roi)?;
     let level_offsets = compute_level_offsets(&block_write_roi, &level_stride)?;
 
@@ -556,19 +283,13 @@ fn create_dep_graph(
             block_dim_offsets.push((*lo..*e).step_by(usize::try_from(*s).unwrap()));
         }
         let mut block_offsets = vec![];
-        for (c, b, a) in iproduct![
-            block_dim_offsets.pop().ok_or(DaisyError::new("Not 3D!"))?,
-            block_dim_offsets.pop().ok_or(DaisyError::new("Not 3D!"))?,
-            block_dim_offsets.pop().ok_or(DaisyError::new("Not 3D!"))?
-        ] {
-            block_offsets.push(Coordinate {
-                value: vec![a, b, c],
-            });
+        for coord in cartesian_product(&block_dim_offsets, vec![vec![]]) {
+            block_offsets.push(Coordinate::new(coord));
         }
 
         let block_offsets: Vec<Coordinate> = block_offsets
             .iter()
-            .map(|offset| &(offset + &total_roi.begin()) - &block_read_roi.begin())
+            .map(|offset| &(offset + &total_roi.get_begin()) - &block_read_roi.get_begin())
             .collect();
 
         let mut new_blocks = enumerate_blocks(
