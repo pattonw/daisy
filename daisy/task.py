@@ -1,9 +1,12 @@
 import copy
 from .parameter import Parameter, UNDEFINED_DAISY_PARAMETER
+import logging
+
+logger = logging.getLogger(__file__)
 
 
-class Task():
-    '''``daisy.Task`` takes inspiration from ``luigi.Task``, where
+class Task:
+    """``daisy.Task`` takes inspiration from ``luigi.Task``, where
     users can define a task (or a stage in the pipeline) and chain
     multiple tasks together to create a bigger dependency graph for
     Daisy to execute block-wise.
@@ -32,35 +35,34 @@ class Task():
 
             Override this to define dependencies of this task. Should
             return a list of ``Task``s that this one depends on.
-    '''
+    """
 
     log_to_files = Parameter(default=False)
     log_to_stdout = Parameter(default=True)
 
     def inheritParameters(self, current_class):
-        '''Recursively query and inherit `Parameter`s from base `Task`s.
+        """Recursively query and inherit `Parameter`s from base `Task`s.
         Parameters are copied to self.__daisy_params__ to be processed
         downstream.
 
         If duplicated, `Parameter`s of derived `Task`s will override ones
         from base `Task`s, even if it clears any default. This lets
         inherited `Task` to unset defaults and force user to input new
-        values.'''
+        values."""
         for b in current_class.__bases__:
             self.inheritParameters(b)
 
         for param in current_class.__dict__:
             if isinstance(current_class.__dict__[param], Parameter):
-                if (current_class.__dict__[param].val is not
-                        UNDEFINED_DAISY_PARAMETER):
+                if current_class.__dict__[param].val is not UNDEFINED_DAISY_PARAMETER:
                     self.__daisy_params__[param] = copy.deepcopy(
-                                                current_class.__dict__[param])
+                        current_class.__dict__[param]
+                    )
                 else:
-                    self.__daisy_params__[param] = (
-                                                current_class.__dict__[param])
+                    self.__daisy_params__[param] = current_class.__dict__[param]
 
     def __init__(self, task_id=None, global_config=None, **kwargs):
-        '''Constructor for ``Task``. Should not be overridden by
+        """Constructor for ``Task``. Should not be overridden by
         subclasses.
 
         Args:
@@ -93,7 +95,7 @@ class Task():
                 the highest priority, namely higher than global
                 configurations.
 
-        '''
+        """
         if task_id:
             self.task_id = task_id
         else:
@@ -116,8 +118,9 @@ class Task():
                     self.__daisy_params__[key].set(config[key])
                 else:
                     raise RuntimeError(
-                            "Key %s is not in the Parameter list for Task %s" %
-                            (key, self.task_id))
+                        "Key %s is not in the Parameter list for Task %s"
+                        % (key, self.task_id)
+                    )
 
         # applying user input parameters
         for key in kwargs:
@@ -125,9 +128,9 @@ class Task():
                 self.__daisy_params__[key].set(kwargs[key])
             else:
                 raise RuntimeError(
-                        "Key %s not found in "
-                        "Parameter list for Task %s" %
-                        (key, self.task_id))
+                    "Key %s not found in "
+                    "Parameter list for Task %s" % (key, self.task_id)
+                )
 
         # finalize parameters
         for param in self.__daisy_params__:
@@ -135,30 +138,31 @@ class Task():
             if val is UNDEFINED_DAISY_PARAMETER:
                 raise RuntimeError(
                     "Parameter %s of %s is unassigned! You can probably fix "
-                    "this by passing in `default` such as `None`" %
-                    (param, self.task_id))
+                    "this by passing in `default` such as `None`"
+                    % (param, self.task_id)
+                )
             setattr(self, param, val)
 
     def prepare(self):
-        '''Subclasses override this to perform setup actions'''
+        """Subclasses override this to perform setup actions"""
         raise NotImplementedError("Client task needs to implement prepare()")
 
     def schedule(
-            self,
-            total_roi,
-            read_roi,
-            write_roi,
-            process_function,
-            check_function=None,
-            read_write_conflict=True,
-            num_workers=1,
-            max_retries=2,
-            fit='valid',
-            timeout=None
-            ):
-        '''Configure necessary parameters for the scheduler to run this
+        self,
+        total_roi,
+        read_roi,
+        write_roi,
+        process_function,
+        check_function=None,
+        read_write_conflict=True,
+        num_workers=1,
+        max_retries=2,
+        fit="valid",
+        timeout=None,
+    ):
+        """Configure necessary parameters for the scheduler to run this
         task. The arguments are the same as those in
-        ```scheduler.run_blockwise()```'''
+        ```scheduler.run_blockwise()```"""
 
         class Object(object):
             pass
@@ -169,10 +173,15 @@ class Task():
         self._daisy.orig_total_roi = total_roi
         self._daisy.read_roi = read_roi
         self._daisy.write_roi = write_roi
-        self._daisy.total_write_roi = self._daisy.total_roi.grow(
-                                -(write_roi.get_begin()-read_roi.get_begin()),
-                                -(read_roi.get_end()-write_roi.get_end()),
-                                )
+
+        logger.info(f"write_roi: {write_roi}, read_roi: {read_roi}")
+
+        grow_a = -(write_roi.get_begin() - read_roi.get_begin())
+        grow_b = -(read_roi.get_end() - write_roi.get_end())
+        logger.info(f"write_roi: {write_roi}, read_roi: {read_roi}")
+        logger.info(f"grow_a: {grow_a}, grow_b: {grow_b}")
+
+        self._daisy.total_write_roi = self._daisy.total_roi.grow(grow_a, grow_b)
         self._daisy.process_function = process_function
         self._daisy.read_write_conflict = read_write_conflict
         self._daisy.fit = fit
@@ -192,15 +201,15 @@ class Task():
             self._daisy.post_check = lambda _: True
 
     def cleanup(self):
-        '''Override this to perform any post-task cleanup action'''
+        """Override this to perform any post-task cleanup action"""
         pass
 
     def requires(self):
-        '''Subclasses override this to specify its dependencies as a
-        list of ``Task``s'''
+        """Subclasses override this to specify its dependencies as a
+        list of ``Task``s"""
         return []
 
     def _periodic_callback(self):
-        '''Daisy calls this function periodically while checking for status.
-        Override it to perform periodic bookkeeping.'''
+        """Daisy calls this function periodically while checking for status.
+        Override it to perform periodic bookkeeping."""
         pass

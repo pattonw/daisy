@@ -9,13 +9,13 @@ use crate::cantor::cantor_number;
 #[pyclass(module = "daisy")]
 #[derive(Debug, Clone)]
 pub struct Block {
-    // #[pyo3(get)]
+    #[pyo3(get)]
     pub read_roi: Roi,
-    // #[pyo3(get)]
+    #[pyo3(get)]
     pub write_roi: Roi,
-    // #[pyo3(get)]
+    #[pyo3(get)]
     pub block_id: u64,
-    // #[pyo3(get)]
+    #[pyo3(get)]
     pub z_order_id: u64,
 }
 
@@ -65,8 +65,6 @@ impl Block {
         };
     }
     pub fn shrink_to(self, container: &Roi) -> Option<Self> {
-        // make sure self is entirely contained in container
-
         let contained_read_roi = container.intersect(&self.read_roi);
         let diff_top = &self.read_roi.end() - &contained_read_roi.end();
         let diff_bot = &contained_read_roi.get_begin() - &self.read_roi.get_begin();

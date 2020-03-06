@@ -1,13 +1,28 @@
-use std::ops::{Add, Div, Mul, Sub};
 use std::cmp::Ordering;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
+use pyo3::class::basic::CompareOp;
+use pyo3::class::{PyIterProtocol, PyNumberProtocol, PyObjectProtocol, PySequenceProtocol};
+use pyo3::exceptions;
 use pyo3::prelude::*;
+
+use crate::daisy_error::DaisyError;
 
 #[pyclass]
 #[derive(Debug, Eq, Clone)]
 pub struct Coordinate {
     // #[pyo3(get)]
     pub value: Vec<i64>,
+    iterindex: usize,
+}
+
+impl<'a> Neg for &'a Coordinate {
+    type Output = Coordinate;
+
+    fn neg(self) -> Coordinate {
+        let new_value: Vec<i64> = self.value.iter().map(|a| -*a).collect();
+        Coordinate::new(new_value)
+    }
 }
 
 impl<'a, 'b> Add<&'b Coordinate> for &'a Coordinate {
@@ -117,9 +132,6 @@ impl PartialEq for Coordinate {
 }
 
 impl Coordinate {
-    pub fn new(coordinate: Vec<i64>) -> Self {
-        Coordinate { value: coordinate }
-    }
     pub fn max(&self, rhs: &Coordinate) -> Coordinate {
         let new_value: Vec<i64> = self
             .value
@@ -130,7 +142,7 @@ impl Coordinate {
                 _ => *a,
             })
             .collect();
-        Self { value: new_value }
+        Self::new(new_value)
     }
     pub fn min(&self, rhs: &Coordinate) -> Coordinate {
         let new_value: Vec<i64> = self
@@ -142,9 +154,124 @@ impl Coordinate {
                 _ => *a,
             })
             .collect();
-        Self { value: new_value }
+        Self::new(new_value)
+    }
+}
+
+#[pymethods]
+impl Coordinate {
+    #[new]
+    #[args(value = "vec![0,1,2]")]
+    pub fn new(value: Vec<i64>) -> Self {
+        Coordinate {
+            value: value,
+            iterindex: 0,
+        }
+    }
+    fn __getitem__(&self, x: usize) -> PyResult<i64> {
+        match self.value.get(x) {
+            Some(coord) => Ok(*coord),
+            None => Err(PyErr::from(DaisyError::new("Index out of bounds"))),
+        }
+    }
+    fn __setstate__(mut slf: PyRefMut<Self>, state: Vec<i64>) -> () {
+        println!["set state with state: {:?}", state];
+        slf.value = state;
+    }
+    fn __getstate__(&self) -> PyResult<Vec<i64>> {
+        println!["get state: {:?}", self.value];
+        Ok(self.value.clone())
     }
     pub fn dims(&self) -> usize {
         self.value.len()
+    }
+}
+
+#[pyproto]
+impl PySequenceProtocol for Coordinate {
+    fn __len__(&self) -> PyResult<usize> {
+        Ok(self.value.len())
+    }
+    fn __getitem__(&self, idx: isize) -> PyResult<i64> {
+        match self.value.get(idx as usize) {
+            Some(x) => Ok(*x),
+            None => Err(PyErr::new::<exceptions::IndexError, _>(format![
+                "index {} out of bounds for Coordinate of length {}",
+                idx,
+                self.value.len(),
+            ])),
+        }
+    }
+    fn __setitem__(&mut self, idx: isize, value: i64) -> PyResult<()> {
+        match self.value.get_mut(idx as usize) {
+            Some(slice) => {
+                *slice = value;
+                Ok(())
+            }
+            None => Err(PyErr::new::<exceptions::IndexError, _>(format![
+                "index {} out of bounds for Coordinate of length {}",
+                idx,
+                self.value.len(),
+            ])),
+        }
+    }
+    fn __delitem__(&mut self, _idx: isize) -> PyResult<()> {
+        Err(PyErr::new::<exceptions::NotImplementedError, _>(
+            "`del` is not supported on Coordinates",
+        ))
+    }
+    fn __contains__(&self, item: i64) -> PyResult<bool> {
+        Ok(self.value.contains(&item))
+    }
+    fn __repeat__(&self, count: isize) -> PyResult<()> {
+        Err(PyErr::new::<exceptions::NotImplementedError, _>(
+            "`repeat` is not supported on Coordinates",
+        ))
+    }
+}
+
+#[pyproto]
+impl PyIterProtocol for Coordinate {
+    fn __iter__(mut slf: PyRefMut<Self>) -> PyResult<Py<Coordinate>> {
+        slf.iterindex = 0;
+        Ok(slf.into())
+    }
+    fn __next__(mut slf: PyRefMut<Self>) -> PyResult<Option<i64>> {
+        let current = slf.value.get(slf.iterindex).copied();
+        slf.iterindex += 1;
+        Ok(current)
+    }
+}
+
+#[pyproto]
+impl PyObjectProtocol for Coordinate {
+    fn __str__(&self) -> PyResult<String> {
+        Ok(format!["{:?}", self.value])
+    }
+    fn __repr__(&self) -> PyResult<String> {
+        Ok(format!["{:?}", self.value])
+    }
+    fn __richcmp__(self, other: Self, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Eq => Ok(self == &other),
+            x => Err(PyErr::new::<exceptions::NotImplementedError, _>(format![
+                "Comparison not implemented for operation {:?}",
+                x
+            ])),
+        }
+    }
+}
+
+#[pyproto]
+impl PyNumberProtocol for Coordinate {
+    fn __add__(lhs: Self, rhs: Self) -> PyResult<Self> {
+        Ok(&lhs + &rhs)
+    }
+    fn __sub__(lhs: Self, rhs: Self) -> PyResult<Self> {
+        println!["lhs: {:?}, rhs: {:?}", lhs, rhs];
+        Ok(&lhs - &rhs)
+    }
+    fn __neg__(self) -> PyResult<Self> {
+        Ok(-self)
     }
 }

@@ -1,6 +1,9 @@
 import numbers
+from .daisy import coordinate
 
+Coordinate = coordinate.Coordinate
 
+"""
 class Coordinate(tuple):
     '''A ``tuple`` of integers.
 
@@ -208,3 +211,4 @@ class Coordinate(tuple):
             raise TypeError(
                 "mod of Coordinate with type %s not supported" %
                 type(other))
+"""

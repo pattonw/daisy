@@ -21,12 +21,11 @@ use coordinate::Coordinate;
 mod roi;
 use roi::Roi;
 
-mod daisy_result;
 mod daisy_error;
+mod daisy_result;
 
 use daisy_error::DaisyError;
 use daisy_result::DaisyResult;
-
 
 #[derive(Clone, Copy)]
 enum Fit {
@@ -205,28 +204,16 @@ fn create_dependency_graph(
     fit: &'static str,
 ) -> PyResult<Vec<(Block, Vec<Block>)>> {
     let total_roi = Roi::new(
-        Coordinate {
-            value: total_roi_offset,
-        },
-        Coordinate {
-            value: total_roi_shape,
-        },
+        Coordinate::new(total_roi_offset),
+        Coordinate::new(total_roi_shape),
     )?;
     let block_read_roi = Roi::new(
-        Coordinate {
-            value: block_read_offset,
-        },
-        Coordinate {
-            value: block_read_shape,
-        },
+        Coordinate::new(block_read_offset),
+        Coordinate::new(block_read_shape),
     )?;
     let block_write_roi = Roi::new(
-        Coordinate {
-            value: block_write_offset,
-        },
-        Coordinate {
-            value: block_write_shape,
-        },
+        Coordinate::new(block_write_offset),
+        Coordinate::new(block_write_shape),
     )?;
     let fit = match fit {
         "valid" => Fit::Valid,
@@ -309,6 +296,7 @@ fn create_dep_graph(
 fn daisy(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(blocks))?;
     m.add_wrapped(wrap_pymodule!(block))?;
+    m.add_wrapped(wrap_pymodule!(coordinate))?;
     Ok(())
 }
 
@@ -321,6 +309,12 @@ fn blocks(py: Python, m: &PyModule) -> PyResult<()> {
 #[pymodule]
 fn block(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Block>()?;
+    Ok(())
+}
+
+#[pymodule]
+fn coordinate(py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<Coordinate>()?;
     Ok(())
 }
 
