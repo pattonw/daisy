@@ -12,7 +12,7 @@ use crate::daisy_error::DaisyError;
 #[derive(Debug, Eq, Clone)]
 pub struct Coordinate {
     // #[pyo3(get)]
-    pub value: Vec<i64>,
+    pub value: Vec<Option<i64>>,
     iterindex: usize,
 }
 
@@ -20,7 +20,14 @@ impl<'a> Neg for &'a Coordinate {
     type Output = Coordinate;
 
     fn neg(self) -> Coordinate {
-        let new_value: Vec<i64> = self.value.iter().map(|a| -*a).collect();
+        let new_value: Vec<Option<i64>> = self
+            .value
+            .iter()
+            .map(|a| match a {
+                Some(c) => Some(-c),
+                None => None,
+            })
+            .collect();
         Coordinate::new(new_value)
     }
 }
@@ -29,11 +36,14 @@ impl<'a, 'b> Add<&'b Coordinate> for &'a Coordinate {
     type Output = Coordinate;
 
     fn add(self, rhs: &'b Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
+        let new_value: Vec<Option<i64>> = self
             .value
             .iter()
             .zip(rhs.value.iter())
-            .map(|(a, b)| *a + *b)
+            .map(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => Some(a + b),
+                _ => None,
+            })
             .collect();
         Coordinate::new(new_value)
     }
@@ -43,7 +53,14 @@ impl<T: Into<i64> + Copy> Add<T> for &Coordinate {
     type Output = Coordinate;
 
     fn add(self, rhs: T) -> Coordinate {
-        let new_value: Vec<i64> = self.value.iter().map(|a| *a + rhs.into()).collect();
+        let new_value: Vec<Option<i64>> = self
+            .value
+            .iter()
+            .map(|a| match a {
+                Some(a) => Some(a + rhs.into()),
+                _ => None,
+            })
+            .collect();
         Coordinate::new(new_value)
     }
 }
@@ -52,11 +69,14 @@ impl<'a, 'b> Sub<&'b Coordinate> for &'a Coordinate {
     type Output = Coordinate;
 
     fn sub(self, rhs: &'b Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
+        let new_value: Vec<Option<i64>> = self
             .value
             .iter()
             .zip(rhs.value.iter())
-            .map(|(a, b)| *a - *b)
+            .map(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => Some(a - b),
+                _ => None,
+            })
             .collect();
         Coordinate::new(new_value)
     }
@@ -66,7 +86,14 @@ impl<T: Into<i64> + Copy> Sub<T> for &Coordinate {
     type Output = Coordinate;
 
     fn sub(self, rhs: T) -> Coordinate {
-        let new_value: Vec<i64> = self.value.iter().map(|a| *a - rhs.into()).collect();
+        let new_value: Vec<Option<i64>> = self
+            .value
+            .iter()
+            .map(|a| match a {
+                Some(a) => Some(*a - rhs.into()),
+                _ => None,
+            })
+            .collect();
         Coordinate::new(new_value)
     }
 }
@@ -75,11 +102,14 @@ impl<'a, 'b> Div<&'b Coordinate> for &'a Coordinate {
     type Output = Coordinate;
 
     fn div(self, rhs: &'b Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
+        let new_value: Vec<Option<i64>> = self
             .value
             .iter()
             .zip(rhs.value.iter())
-            .map(|(a, b)| *a / *b)
+            .map(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => Some(a / b),
+                _ => None,
+            })
             .collect();
         Coordinate::new(new_value)
     }
@@ -89,11 +119,14 @@ impl<'a, 'b> Mul<&'b Coordinate> for &'a Coordinate {
     type Output = Coordinate;
 
     fn mul(self, rhs: &'b Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
+        let new_value: Vec<Option<i64>> = self
             .value
             .iter()
             .zip(rhs.value.iter())
-            .map(|(a, b)| *a * *b)
+            .map(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => Some(a * b),
+                _ => None,
+            })
             .collect();
         Coordinate::new(new_value)
     }
@@ -133,7 +166,7 @@ impl PartialEq for Coordinate {
 
 impl Coordinate {
     pub fn max(&self, rhs: &Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
+        let new_value: Vec<Option<i64>> = self
             .value
             .iter()
             .zip(rhs.value.iter())
@@ -145,7 +178,7 @@ impl Coordinate {
         Self::new(new_value)
     }
     pub fn min(&self, rhs: &Coordinate) -> Coordinate {
-        let new_value: Vec<i64> = self
+        let new_value: Vec<Option<i64>> = self
             .value
             .iter()
             .zip(rhs.value.iter())
@@ -161,24 +194,24 @@ impl Coordinate {
 #[pymethods]
 impl Coordinate {
     #[new]
-    #[args(value = "vec![0,1,2]")]
-    pub fn new(value: Vec<i64>) -> Self {
+    #[args(value = "vec![Some(0),Some(1),Some(2)]")]
+    pub fn new(value: Vec<Option<i64>>) -> Self {
         Coordinate {
             value: value,
             iterindex: 0,
         }
     }
-    fn __getitem__(&self, x: usize) -> PyResult<i64> {
+    fn __getitem__(&self, x: usize) -> PyResult<Option<i64>> {
         match self.value.get(x) {
             Some(coord) => Ok(*coord),
             None => Err(PyErr::from(DaisyError::new("Index out of bounds"))),
         }
     }
-    fn __setstate__(mut slf: PyRefMut<Self>, state: Vec<i64>) -> () {
+    fn __setstate__(mut slf: PyRefMut<Self>, state: Vec<Option<i64>>) -> () {
         println!["set state with state: {:?}", state];
         slf.value = state;
     }
-    fn __getstate__(&self) -> PyResult<Vec<i64>> {
+    fn __getstate__(&self) -> PyResult<Vec<Option<i64>>> {
         println!["get state: {:?}", self.value];
         Ok(self.value.clone())
     }
@@ -192,7 +225,7 @@ impl PySequenceProtocol for Coordinate {
     fn __len__(&self) -> PyResult<usize> {
         Ok(self.value.len())
     }
-    fn __getitem__(&self, idx: isize) -> PyResult<i64> {
+    fn __getitem__(&self, idx: isize) -> PyResult<Option<i64>> {
         match self.value.get(idx as usize) {
             Some(x) => Ok(*x),
             None => Err(PyErr::new::<exceptions::IndexError, _>(format![
@@ -202,7 +235,7 @@ impl PySequenceProtocol for Coordinate {
             ])),
         }
     }
-    fn __setitem__(&mut self, idx: isize, value: i64) -> PyResult<()> {
+    fn __setitem__(&mut self, idx: isize, value: Option<i64>) -> PyResult<()> {
         match self.value.get_mut(idx as usize) {
             Some(slice) => {
                 *slice = value;
@@ -220,7 +253,7 @@ impl PySequenceProtocol for Coordinate {
             "`del` is not supported on Coordinates",
         ))
     }
-    fn __contains__(&self, item: i64) -> PyResult<bool> {
+    fn __contains__(&self, item: Option<i64>) -> PyResult<bool> {
         Ok(self.value.contains(&item))
     }
     fn __repeat__(&self, count: isize) -> PyResult<()> {
@@ -236,7 +269,7 @@ impl PyIterProtocol for Coordinate {
         slf.iterindex = 0;
         Ok(slf.into())
     }
-    fn __next__(mut slf: PyRefMut<Self>) -> PyResult<Option<i64>> {
+    fn __next__(mut slf: PyRefMut<Self>) -> PyResult<Option<Option<i64>>> {
         let current = slf.value.get(slf.iterindex).copied();
         slf.iterindex += 1;
         Ok(current)
