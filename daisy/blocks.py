@@ -251,7 +251,9 @@ def enumerate_blocks(
 
     inclusion_criteria = {
         'valid': lambda b: total_roi.contains(b.read_roi),
-        'overhang': lambda b: total_roi.contains(b.write_roi.get_begin()),
+        'overhang': lambda b: total_roi.contains(
+            b.write_roi.get_begin() + b.read_roi.get_end() - b.write_roi.get_end()
+            ),
         'shrink': lambda b: shrink_possible(total_roi, b)
     }[fit]
 
