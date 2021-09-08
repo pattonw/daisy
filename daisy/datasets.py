@@ -37,8 +37,12 @@ def _read_voxel_size_offset(ds, order='C'):
     dims = None
 
     if 'resolution' in ds.attrs:
-
+        # funkelab convention
         voxel_size = tuple(ds.attrs['resolution'])
+        dims = len(voxel_size)
+    elif 'pixelResolution' in ds.attrs:
+        # cosem convention
+        voxel_size = tuple(ds.attrs['pixelResolution']['dimensions'])
         dims = len(voxel_size)
 
     if 'offset' in ds.attrs:
