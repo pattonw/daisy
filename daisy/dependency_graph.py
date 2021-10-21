@@ -243,7 +243,8 @@ class BlockwiseDependencyGraph:
                 return i
         raise NotImplementedError(
             f"Should not be reachable! {level_offset} not in "
-            f"{self._level_offsets}, stride: {self._level_stride}"
+            f"{self._level_offsets}, stride: {self._level_stride}\n"
+            f"Block: {block}, block_offset: {block_offset}"
         )
 
     def downstream(self, block):
@@ -253,6 +254,7 @@ class BlockwiseDependencyGraph:
         """
         level = self._level(block)
         next_level = level + 1
+
         if next_level >= self.num_levels:
             return []
 
