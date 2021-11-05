@@ -69,6 +69,10 @@ class Server(ServerObservee):
             logger.debug("TCP streams closed.")
             self.notify_server_exit()
 
+        task_states = self.scheduler.task_states
+        return all([task_state.completed_count == task_state.total_block_count for task_state in task_states.values()])
+
+
     def _event_loop(self):
 
         while not self.stop_event.is_set():
