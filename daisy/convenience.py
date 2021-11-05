@@ -17,7 +17,16 @@ def run_blockwise(tasks):
                 `True` if all blocks in the given `tasks` were successfully
                 run, else `False`
     '''
+    task_ids = set()
+    all_tasks = []
+    while len(tasks) > 0:
+        task, tasks = tasks[0], tasks[1:]
+        if task.task_id not in task_ids:
+            task_ids.add(task.task_id)
+            all_tasks.append(task)
+        tasks.extend(task.upstream_tasks)
 
+    tasks = all_tasks
     stop_event = Event()
 
     IOLooper.clear()
@@ -30,7 +39,7 @@ def run_blockwise(tasks):
         return result.get()
 
 
-def _run_blockwise(tasks, stop_event):
+def _run_blockwise(tasks, stop_event, return_value):
     server = Server(stop_event=stop_event)
     cl_monitor = CLMonitor(server)  # noqa
     return server.run_blockwise(tasks)
