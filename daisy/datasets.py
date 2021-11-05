@@ -44,6 +44,10 @@ def _read_voxel_size_offset(ds, order='C'):
         # cosem convention
         voxel_size = tuple(ds.attrs['pixelResolution']['dimensions'])
         dims = len(voxel_size)
+    elif 'transform' in ds.attrs:
+        # also a cosem convention
+        voxel_size = tuple(ds.attrs['transform']['scale'])
+        dims = len(voxel_size)
 
     if 'offset' in ds.attrs:
 
