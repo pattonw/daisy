@@ -39,7 +39,7 @@ def run_blockwise(tasks):
         return result.get()
 
 
-def _run_blockwise(tasks, stop_event, return_value):
+def _run_blockwise(tasks, stop_event):
     server = Server(stop_event=stop_event)
     cl_monitor = CLMonitor(server)  # noqa
     return server.run_blockwise(tasks)
